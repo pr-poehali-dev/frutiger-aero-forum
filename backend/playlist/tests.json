@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "name": "Get daily playlist",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "date": "string",
+        "playlist": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

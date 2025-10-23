@@ -12,6 +12,7 @@ const API_URLS = {
   auth: 'https://functions.poehali.dev/6d95dc38-8fc8-4d36-b094-81ee8081b7e9',
   chat: 'https://functions.poehali.dev/5aeb0897-4934-419e-a1e7-23fb6c69a537',
   stats: 'https://functions.poehali.dev/7ae690ba-0dd6-4e3a-bd1a-4a3e14dccd72',
+  playlist: 'https://functions.poehali.dev/14f1a4da-9e92-4d19-8c3f-dd0c1a6ee3da',
 };
 
 const Index = () => {
@@ -24,6 +25,8 @@ const Index = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [playlist, setPlaylist] = useState<any[]>([]);
+  const [playlistDate, setPlaylistDate] = useState('');
 
   const forumPosts = [
     { 
@@ -82,10 +85,22 @@ const Index = () => {
     }
   };
 
+  const fetchPlaylist = async () => {
+    try {
+      const response = await fetch(API_URLS.playlist);
+      const data = await response.json();
+      setPlaylist(data.playlist || []);
+      setPlaylistDate(data.date || '');
+    } catch (error) {
+      console.error('Error fetching playlist:', error);
+    }
+  };
+
   useEffect(() => {
     fetchMessages();
     fetchOnlineUsers();
     fetchStats();
+    fetchPlaylist();
 
     const interval = setInterval(() => {
       fetchMessages();
@@ -93,7 +108,14 @@ const Index = () => {
       fetchStats();
     }, 3000);
 
-    return () => clearInterval(interval);
+    const playlistInterval = setInterval(() => {
+      fetchPlaylist();
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(playlistInterval);
+    };
   }, []);
 
   const handleLogin = async () => {
@@ -164,7 +186,7 @@ const Index = () => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-white drop-shadow-lg tracking-wide">
-                  FORUM
+                  Frutiger World
                 </h1>
                 <p className="text-blue-100 text-sm">Ностальгический портал в стиле Windows Vista</p>
               </div>
@@ -264,7 +286,7 @@ const Index = () => {
 
             {activeSection === 'radio' && (
               <Card className="glass-panel border-none shadow-2xl">
-                <div className="p-6">
+                <div className="p-6 space-y-6">
                   <h2 className="text-2xl font-bold text-white mb-4 drop-shadow-md">🎵 Радио FM</h2>
                   <div className="glass-panel rounded-lg p-6 space-y-4 aero-reflection">
                     <div className="flex items-center justify-center">
@@ -285,6 +307,32 @@ const Index = () => {
                         <Icon name="SkipForward" size={24} />
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="glass-panel rounded-lg p-6 aero-reflection">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-blue-900">📅 Плейлист на сегодня</h3>
+                      <span className="text-sm text-blue-600">{playlistDate}</span>
+                    </div>
+                    <p className="text-xs text-blue-600 mb-4">Обновляется каждые 24 часа</p>
+                    <ScrollArea className="h-96">
+                      <div className="space-y-2">
+                        {playlist.map((song, index) => (
+                          <div key={index} className="glass-panel rounded-lg p-3 flex items-center justify-between hover:bg-white/30 transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                                {song.order}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-blue-900">{song.title}</p>
+                                <p className="text-sm text-blue-700">{song.artist}</p>
+                              </div>
+                            </div>
+                            <span className="text-sm text-blue-600">{song.duration}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
                 </div>
               </Card>
@@ -369,18 +417,22 @@ const Index = () => {
                         <Icon name="Headphones" size={64} className="text-white" />
                       </div>
                     </div>
-                    <h3 className="text-xl font-bold text-blue-900">Техподдержка 24/7</h3>
-                    <p className="text-blue-700">Мы всегда готовы помочь!</p>
-                    <div className="space-y-2">
-                      <Button size="lg" className="glass-button text-blue-900 font-bold hover:scale-105 transition-transform w-full">
-                        <Icon name="MessageCircle" size={18} />
-                        <span className="ml-2">Начать чат</span>
-                      </Button>
-                      <Button size="lg" className="glass-button text-blue-900 font-bold hover:scale-105 transition-transform w-full">
-                        <Icon name="Mail" size={18} />
-                        <span className="ml-2">Написать email</span>
-                      </Button>
+                    <h3 className="text-xl font-bold text-blue-900">Техподдержка</h3>
+                    <div className="text-left space-y-3 glass-panel rounded-lg p-4">
+                      <p className="text-blue-700">Напишите нам на почту:</p>
+                      <a href="mailto:belugakitovski@gmail.com" className="text-blue-900 font-bold text-lg hover:underline block">
+                        belugakitovski@gmail.com
+                      </a>
+                      <p className="text-sm text-blue-600">Мы ответим в течение недели</p>
                     </div>
+                    <Button 
+                      size="lg" 
+                      className="glass-button text-blue-900 font-bold hover:scale-105 transition-transform w-full"
+                      onClick={() => window.location.href = 'mailto:belugakitovski@gmail.com'}
+                    >
+                      <Icon name="Mail" size={18} />
+                      <span className="ml-2">Написать письмо</span>
+                    </Button>
                   </div>
                 </div>
               </Card>
