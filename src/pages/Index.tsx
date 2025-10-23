@@ -1,19 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
+
+const API_URLS = {
+  auth: 'https://functions.poehali.dev/6d95dc38-8fc8-4d36-b094-81ee8081b7e9',
+  chat: 'https://functions.poehali.dev/5aeb0897-4934-419e-a1e7-23fb6c69a537',
+  stats: 'https://functions.poehali.dev/7ae690ba-0dd6-4e3a-bd1a-4a3e14dccd72',
+};
 
 const Index = () => {
+  const { toast } = useToast();
   const [activeSection, setActiveSection] = useState('forum');
   const [chatMessage, setChatMessage] = useState('');
-  const [messages, setMessages] = useState([
-    { id: 1, user: 'User123', text: 'Привет всем!', time: '14:32' },
-    { id: 2, user: 'Admin', text: 'Добро пожаловать на форум!', time: '14:35' },
-  ]);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [stats, setStats] = useState({ total_users: 0, online_users: 0, total_topics: 567, total_messages: 8901 });
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const forumPosts = [
     { 
@@ -42,20 +52,109 @@ const Index = () => {
     },
   ];
 
-  const sendMessage = () => {
-    if (chatMessage.trim()) {
-      setMessages([...messages, {
-        id: messages.length + 1,
-        user: 'Вы',
-        text: chatMessage,
-        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-      }]);
-      setChatMessage('');
+  const fetchMessages = async () => {
+    try {
+      const response = await fetch(API_URLS.chat);
+      const data = await response.json();
+      setMessages(data.messages || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
     }
   };
 
+  const fetchOnlineUsers = async () => {
+    try {
+      const response = await fetch(API_URLS.auth);
+      const data = await response.json();
+      setOnlineUsers(data.users || []);
+    } catch (error) {
+      console.error('Error fetching online users:', error);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(API_URLS.stats);
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchMessages();
+    fetchOnlineUsers();
+    fetchStats();
+
+    const interval = setInterval(() => {
+      fetchMessages();
+      fetchOnlineUsers();
+      fetchStats();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(API_URLS.auth, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm),
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentUser(data.user);
+        setShowLogin(false);
+        toast({ title: 'Успешно!', description: `Добро пожаловать, ${data.user.username}!` });
+      } else {
+        toast({ title: 'Ошибка', description: data.error || 'Неверные данные', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось войти', variant: 'destructive' });
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!currentUser) {
+      toast({ title: 'Войдите в систему', description: 'Нужно войти, чтобы писать сообщения', variant: 'destructive' });
+      setShowLogin(true);
+      return;
+    }
+
+    if (chatMessage.trim()) {
+      try {
+        const response = await fetch(API_URLS.chat, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: currentUser.username,
+            message: chatMessage,
+          }),
+        });
+        
+        if (response.ok) {
+          setChatMessage('');
+          fetchMessages();
+        }
+      } catch (error) {
+        toast({ title: 'Ошибка', description: 'Не удалось отправить сообщение', variant: 'destructive' });
+      }
+    }
+  };
+
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
-    <div className="min-h-screen p-4">
+    <div 
+      className="min-h-screen p-4 bg-cover bg-center bg-fixed"
+      style={{ backgroundImage: 'url(https://cdn.poehali.dev/projects/409ad78a-9320-42f1-ab96-b68763747d46/files/1bbc5e0e-bdee-4165-bd18-939cd01d21bf.jpg)' }}
+    >
       <div className="max-w-7xl mx-auto">
         <header className="mb-6 glass-panel rounded-xl p-6 aero-reflection">
           <div className="flex items-center justify-between">
@@ -71,10 +170,26 @@ const Index = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button className="glass-button text-blue-900 font-semibold hover:scale-105 transition-transform">
-                <Icon name="User" size={16} />
-                <span className="ml-2">Войти</span>
-              </Button>
+              {currentUser ? (
+                <div className="glass-button px-4 py-2 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="w-6 h-6 border border-white/50">
+                      <AvatarFallback className="bg-gradient-to-br from-blue-400 to-blue-600 text-white text-xs">
+                        {currentUser.username[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-blue-900 font-semibold">{currentUser.username}</span>
+                  </div>
+                </div>
+              ) : (
+                <Button 
+                  onClick={() => setShowLogin(true)}
+                  className="glass-button text-blue-900 font-semibold hover:scale-105 transition-transform"
+                >
+                  <Icon name="User" size={16} />
+                  <span className="ml-2">Войти</span>
+                </Button>
+              )}
             </div>
           </div>
         </header>
@@ -187,15 +302,15 @@ const Index = () => {
                             <div className="flex items-start gap-2">
                               <Avatar className="w-8 h-8 border border-white/50">
                                 <AvatarFallback className="bg-gradient-to-br from-blue-400 to-blue-600 text-white text-xs">
-                                  {msg.user[0]}
+                                  {msg.username[0]}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-semibold text-blue-900 text-sm">{msg.user}</span>
-                                  <span className="text-xs text-blue-600">{msg.time}</span>
+                                  <span className="font-semibold text-blue-900 text-sm">{msg.username}</span>
+                                  <span className="text-xs text-blue-600">{formatTime(msg.created_at)}</span>
                                 </div>
-                                <p className="text-blue-800">{msg.text}</p>
+                                <p className="text-blue-800">{msg.message}</p>
                               </div>
                             </div>
                           </div>
@@ -231,7 +346,11 @@ const Index = () => {
                     </div>
                     <h3 className="text-xl font-bold text-blue-900">Присоединяйтесь к сообществу!</h3>
                     <p className="text-blue-700">Новости, обсуждения и эксклюзивный контент</p>
-                    <Button size="lg" className="glass-button text-blue-900 font-bold hover:scale-105 transition-transform">
+                    <Button 
+                      size="lg" 
+                      className="glass-button text-blue-900 font-bold hover:scale-105 transition-transform"
+                      onClick={() => window.open('https://t.me/Frutigeraero_chat', '_blank')}
+                    >
                       <Icon name="Send" size={18} />
                       <span className="ml-2">Открыть Telegram</span>
                     </Button>
@@ -271,12 +390,12 @@ const Index = () => {
           <div className="space-y-6">
             <Card className="glass-panel border-none shadow-2xl">
               <div className="p-6">
-                <h3 className="text-xl font-bold text-white mb-4 drop-shadow-md">👥 Онлайн</h3>
+                <h3 className="text-xl font-bold text-white mb-4 drop-shadow-md">👥 Онлайн ({stats.online_users})</h3>
                 <div className="space-y-2">
-                  {['Admin', 'User123', 'MusicLover', 'Newbie', 'Guest'].map((user) => (
-                    <div key={user} className="flex items-center gap-2 glass-panel rounded-lg p-2">
-                      <div className="w-2 h-2 rounded-full bg-green-400 shadow-lg"></div>
-                      <span className="text-blue-900 font-medium">{user}</span>
+                  {onlineUsers.map((user) => (
+                    <div key={user.id} className="flex items-center gap-2 glass-panel rounded-lg p-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400 shadow-lg animate-pulse"></div>
+                      <span className="text-blue-900 font-medium">{user.username}</span>
                     </div>
                   ))}
                 </div>
@@ -290,19 +409,19 @@ const Index = () => {
                   <div className="glass-panel rounded-lg p-3">
                     <div className="flex justify-between items-center">
                       <span className="text-blue-700">Пользователей</span>
-                      <span className="font-bold text-blue-900">1,234</span>
+                      <span className="font-bold text-blue-900">{stats.total_users}</span>
                     </div>
                   </div>
                   <div className="glass-panel rounded-lg p-3">
                     <div className="flex justify-between items-center">
                       <span className="text-blue-700">Тем на форуме</span>
-                      <span className="font-bold text-blue-900">567</span>
+                      <span className="font-bold text-blue-900">{stats.total_topics}</span>
                     </div>
                   </div>
                   <div className="glass-panel rounded-lg p-3">
                     <div className="flex justify-between items-center">
                       <span className="text-blue-700">Сообщений</span>
-                      <span className="font-bold text-blue-900">8,901</span>
+                      <span className="font-bold text-blue-900">{stats.total_messages}</span>
                     </div>
                   </div>
                 </div>
@@ -311,6 +430,42 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={showLogin} onOpenChange={setShowLogin}>
+        <DialogContent className="glass-panel border-white/50">
+          <DialogHeader>
+            <DialogTitle className="text-blue-900 text-2xl">Вход в систему</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-blue-900">Имя пользователя</label>
+              <Input
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                placeholder="Admin"
+                className="glass-panel border-white/50 text-blue-900"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-blue-900">Пароль</label>
+              <Input
+                type="password"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                placeholder="admin123"
+                className="glass-panel border-white/50 text-blue-900"
+              />
+            </div>
+            <p className="text-xs text-blue-600">Подсказка: Admin / admin123</p>
+            <Button 
+              onClick={handleLogin}
+              className="glass-button text-blue-900 font-bold w-full hover:scale-105 transition-transform"
+            >
+              Войти
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

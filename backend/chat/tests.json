@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Get chat messages",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "messages": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send chat message",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "username": "TestUser",
+        "message": "Hello from test"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "message": {
+          "username": "TestUser"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
